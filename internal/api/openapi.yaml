@@ -1,0 +1,180 @@
+openapi: 3.1.0
+info:
+  title: NotyHub API
+  version: v1
+  description: |
+    Realtime notification hub. Clients connect over WebSocket at `{{HUB_PATH}}?clientId=...&userId=...`
+    with a JWT; backends push notifications through this API. Every response is a `PetitionResponse`.
+security:
+  - ApiKey: []
+tags:
+  - name: Notifications
+  - name: Clients
+  - name: Development
+  - name: Health
+paths:
+  /api/notifications/clients/{clientId}:
+    post:
+      tags: [Notifications]
+      operationId: SendNotificationToClient
+      summary: Sends a notification to every active connection of a client.
+      parameters:
+        - $ref: "#/components/parameters/ClientId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SendNotificationRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/SendNotification" }
+        "400": { $ref: "#/components/responses/Petition" }
+        "401": { $ref: "#/components/responses/Petition" }
+        "404": { $ref: "#/components/responses/Petition" }
+        "415": { $ref: "#/components/responses/Petition" }
+  /api/notifications/clients/{clientId}/users/{userId}:
+    post:
+      tags: [Notifications]
+      operationId: SendNotificationToUser
+      summary: Sends a notification to the connection of one user of a client.
+      parameters:
+        - $ref: "#/components/parameters/ClientId"
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SendNotificationRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/SendNotification" }
+        "400": { $ref: "#/components/responses/Petition" }
+        "401": { $ref: "#/components/responses/Petition" }
+        "404": { $ref: "#/components/responses/Petition" }
+        "415": { $ref: "#/components/responses/Petition" }
+  /api/clients/{clientId}/connections:
+    get:
+      tags: [Clients]
+      operationId: GetClientConnections
+      summary: Lists the active connections of a client.
+      parameters:
+        - $ref: "#/components/parameters/ClientId"
+      responses:
+        "200":
+          description: Connections of the client, oldest first (empty when it has none).
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PetitionResponse"
+                  - type: object
+                    properties:
+                      result:
+                        type: array
+                        items: { $ref: "#/components/schemas/ClientConnection" }
+        "400": { $ref: "#/components/responses/Petition" }
+        "401": { $ref: "#/components/responses/Petition" }
+  /dev/token:
+    post:
+      tags: [Development]
+      operationId: IssueDevelopmentToken
+      summary: Issues a JWT for a client id (development only).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientId]
+              properties:
+                clientId: { type: string, example: client-1 }
+      responses:
+        "200":
+          description: Token issued.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PetitionResponse"
+                  - type: object
+                    properties:
+                      result:
+                        type: object
+                        properties:
+                          accessToken: { type: string }
+                          expiresAt: { type: string, format: date-time }
+        "400": { $ref: "#/components/responses/Petition" }
+  /health:
+    get:
+      tags: [Health]
+      operationId: Health
+      summary: Liveness check.
+      security: []
+      responses:
+        "200": { $ref: "#/components/responses/Petition" }
+components:
+  securitySchemes:
+    ApiKey:
+      type: apiKey
+      in: header
+      name: "{{API_KEY_HEADER}}"
+      description: Key of a backend allowed to publish notifications.
+  parameters:
+    ClientId:
+      name: clientId
+      in: path
+      required: true
+      description: Client id; no whitespace, at most 128 characters, case-insensitive.
+      schema: { type: string, maxLength: 128 }
+  responses:
+    Petition:
+      description: PetitionResponse envelope.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/PetitionResponse" }
+    SendNotification:
+      description: Notification sent.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/PetitionResponse"
+              - type: object
+                properties:
+                  result: { $ref: "#/components/schemas/SendNotificationResponse" }
+  schemas:
+    PetitionResponse:
+      type: object
+      required: [success, message, module, result, statusCode]
+      properties:
+        success: { type: boolean }
+        message: { type: string }
+        module:
+          type: string
+          enum: [NotificationService, ConnectionService, TokenService, RequestValidation, GlobalExceptionHandler, HealthCheck, Api]
+        result: {}
+        statusCode: { type: integer }
+    SendNotificationRequest:
+      type: object
+      required: [type]
+      properties:
+        type: { type: string, maxLength: 100, example: order.updated }
+        payload:
+          description: Any JSON value, delivered as is.
+          example: { orderId: 7 }
+    SendNotificationResponse:
+      type: object
+      properties:
+        notificationId: { type: string, format: uuid }
+        deliveredConnections: { type: integer }
+        sentAt: { type: string, format: date-time }
+    ClientConnection:
+      type: object
+      properties:
+        connectionId: { type: string }
+        clientId: { type: string }
+        userId: { type: string }
+        connectedAt: { type: string, format: date-time }
+        userAgent: { type: [string, "null"] }

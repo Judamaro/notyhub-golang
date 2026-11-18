@@ -1,0 +1,22 @@
+services:
+  notyhub:
+    build: .
+    image: notyhub:local
+    ports:
+      - "8080:8080"
+    # Metrics port: reachable by Prometheus inside the Docker network, not published on the host.
+    expose:
+      - "9464"
+    environment:
+      # Change these values; they are only meant for local runs.
+      APP_ENV: ${APP_ENV:-production}
+      JWT_ISSUER: notyhub
+      JWT_AUDIENCE: notyhub-clients
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:-local-docker-signing-key-change-me-0123456789}
+      API_KEYS: ${PUBLISHER_API_KEY:-docker-api-key-change-me}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+    healthcheck:
+      test: ["CMD", "/notyhub", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
